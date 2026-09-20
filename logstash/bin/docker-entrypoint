@@ -1,4 +1,5 @@
 #!/bin/bash -e
+set -x
 
 # Map environment variables to entries in logstash.yml.
 # Note that this will mutate logstash.yml in place if any such settings are found.

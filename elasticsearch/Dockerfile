@@ -6,8 +6,10 @@
 ################################################################################
 
 FROM redhat/ubi9-minimal:latest AS builder
+# [builder 1/7] FROM docker.io/redhat/ubi9-minimal:latest@sha256:7b8e25a1b56ca4d00219198f3b5b51a3e1693a5c4f5369c5e190d7d6cb3f980e
 
 RUN microdnf install -y findutils tar gzip
+# [builder 2/7] RUN microdnf install -y findutils tar gzip
 
 # `tini` is a tiny but valid init for containers. This is used to cleanly
 # control how ES and any child processes are shut down.
@@ -26,9 +28,27 @@ RUN set -eux; \
     echo "${tini_sum}  /tmp/tini" | sha256sum -c -; \
     mv /tmp/tini /bin/tini; \
     chmod 0555 /bin/tini
+# [builder 3/7] RUN
+# set -eux;
+# arch="$(rpm --query --queryformat='%{ARCH}' rpm)";
+# case "$arch" in
+#     aarch64) tini_bin='tini-arm64'; tini_sum='07952557df20bfd2a95f9bef198b445e006171969499a1d361bd9e6f8e5e0e81' ;;
+#     x86_64)  tini_bin='tini-amd64'; tini_sum='93dcc18adc78c65a028a84799ecf8ad40c936fdfc5f2a57b1acda5a8117fa82c' ;;
+#     *) echo >&2 "Unsupported architecture $arch"; exit 1 ;;
+# esac ;
+# curl -f --retry 10 -S -L -o /tmp/tini https://github.com/krallin/tini/releases/download/v0.19.0/${tini_bin};
+# echo "${tini_sum} /tmp/tini" | sha256sum -c -;
+# mv /tmp/tini /bin/tini;
+# chmod 0555 /bin/tini
 
 WORKDIR /usr/share/elasticsearch
+# [builder 4/7] WORKDIR /usr/share/elasticsearch
+
 RUN arch="$(rpm --query --queryformat='%{ARCH}' rpm)" && curl -f --retry 10 -S -L --output /tmp/elasticsearch.tar.gz https://artifacts-no-kpi.elastic.co/downloads/elasticsearch/elasticsearch-9.5.4-linux-$arch.tar.gz
+# [builder 5/7] RUN
+# arch="$(rpm --query --queryformat='%{ARCH}' rpm)" &&
+# curl -f --retry 10 -S -L --output /tmp/elasticsearch.tar.gz https://artifacts-no-kpi.elastic.co/downloads/elasticsearch/elasticsearch-9.5.4-linux-$arch.tar.gz
+
 RUN tar -zxf /tmp/elasticsearch.tar.gz --strip-components=1 && \
 # Configure the distribution for Docker
     sed -i -e 's/ES_DISTRIBUTION_TYPE=tar/ES_DISTRIBUTION_TYPE=docker/' bin/elasticsearch-env && \
@@ -52,9 +72,22 @@ RUN tar -zxf /tmp/elasticsearch.tar.gz --strip-components=1 && \
 # dir is owned by `root`, because the installed tries to manipulate the permissions on the plugin's
 # config directory.
     chown 1000:1000 bin config config/jvm.options.d data logs plugins
+# [builder 6/7] RUN
+# tar -zxf /tmp/elasticsearch.tar.gz --strip-components=1 &&
+# sed -i -e 's/ES_DISTRIBUTION_TYPE=tar/ES_DISTRIBUTION_TYPE=docker/' bin/elasticsearch-env &&
+# mkdir data &&
+# find . -type d -exec chmod 0555 {} + &&
+# mv config/log4j2.properties config/log4j2.file.properties &&
+# find . -type f -perm /111 -exec chmod 0555 {} + &&
+# find . -type f ! -perm /111 -exec chmod 0444 {} + &&
+# chmod 0775 bin config config/jvm.options.d data logs plugins &&
+# find config -type f -exec chmod 0664 {} + &&
+# chmod 0775 . &&
+# chown 1000:1000 bin config config/jvm.options.d data logs plugins
 
 # The distribution includes a `config` directory, no need to create it
 COPY --chmod=664 config/elasticsearch.yml config/log4j2.properties config/
+# [builder 7/7] COPY --chmod=664 config/elasticsearch.yml config/log4j2.properties config/
 
 ################################################################################
 # Build stage 2 (the actual Elasticsearch image):
@@ -68,33 +101,50 @@ FROM redhat/ubi9-minimal:latest
 RUN microdnf install --setopt=tsflags=nodocs -y \
     nc shadow-utils tar zip unzip findutils procps-ng && \
     microdnf clean all
+# [stage-1  2/10] RUN
+# microdnf install --setopt=tsflags=nodocs -y nc shadow-utils tar zip unzip findutils procps-ng &&
+# microdnf clean all
 
 RUN groupadd -g 1000 elasticsearch && \
     adduser -u 1000 -g 1000 -G 0 -d /usr/share/elasticsearch elasticsearch && \
     chown -R 0:0 /usr/share/elasticsearch
+# [stage-1  3/10] RUN
+# groupadd -g 1000 elasticsearch &&
+# adduser -u 1000 -g 1000 -G 0 -d /usr/share/elasticsearch elasticsearch &&
+# chown -R 0:0 /usr/share/elasticsearch
 
 ENV ELASTIC_CONTAINER=true
 
 COPY --from=builder /bin/tini /bin/tini
+# [stage-1  4/10] COPY --from=builder /bin/tini /bin/tini
 
 WORKDIR /usr/share/elasticsearch
+# [stage-1  5/10] WORKDIR /usr/share/elasticsearch
 
 COPY --from=builder --chown=0:0 /usr/share/elasticsearch .
+# [stage-1  6/10] COPY --from=builder --chown=0:0 /usr/share/elasticsearch .
 
 # Replace OpenJDK's built-in CA certificate keystore with the one from the OS
 # vendor. The latter is superior in several ways.
 # REF: https://github.com/elastic/elasticsearch-docker/issues/171
 RUN ln -sf /etc/pki/ca-trust/extracted/java/cacerts jdk/lib/security/cacerts
+# [stage-1  7/10] RUN ln -sf /etc/pki/ca-trust/extracted/java/cacerts jdk/lib/security/cacerts
 
 ENV PATH=/usr/share/elasticsearch/bin:$PATH
 ENV SHELL=/bin/bash
 
 COPY --chmod=0555 bin/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+# [stage-1  8/10] COPY --chmod=0555 bin/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 RUN chmod g=u /etc/passwd && \
     find / -xdev -perm -4000 -exec chmod ug-s {} + && \
     chmod 0775 /usr/share/elasticsearch && \
     chown elasticsearch bin config config/jvm.options.d data logs plugins
+# [stage-1  9/10] RUN
+# chmod g=u /etc/passwd &&
+# find / -xdev -perm -4000 -exec chmod ug-s {} + &&
+# chmod 0775 /usr/share/elasticsearch &&
+# chown elasticsearch bin config config/jvm.options.d data logs plugins
 
 EXPOSE 9200 9300
 
@@ -127,6 +177,7 @@ LABEL name="Elasticsearch" \
   description="You know, for search."
 
 RUN mkdir /licenses && ln LICENSE.txt /licenses/LICENSE
+# [stage-1 10/10] RUN mkdir /licenses && ln LICENSE.txt /licenses/LICENSE
 
 # Our actual entrypoint is `tini`, a minimal but functional init program. It
 # calls the entrypoint we provide, while correctly forwarding signals.

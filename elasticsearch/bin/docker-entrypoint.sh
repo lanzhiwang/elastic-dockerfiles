@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+set -x
 
 # Files created by Elasticsearch should always be group writable too
 umask 0002

@@ -1,4 +1,5 @@
 #!/bin/bash
+set -x
 
 # Run Kibana, using environment variables to set longopts defining Kibana's
 # configuration.
